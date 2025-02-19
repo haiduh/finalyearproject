@@ -1,0 +1,17 @@
+.overlay {
+    display: flex;
+    flex-direction: column;  /* Stack the elements vertically */
+    align-items: center;     /* Center elements horizontally */
+    justify-content: center; /* Center elements vertically */
+    height: 100vh;           /* Full height of the viewport */
+    text-align: center;      /* Center text */
+  }
+  
+  input {
+    margin-bottom: 10px;     /* Space between input and button */
+  }
+  
+  button {
+    margin-bottom: 20px;     /* Space between button and response */
+  }
+  
