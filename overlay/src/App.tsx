@@ -23,7 +23,7 @@ function App() {
 
     // Check if input is empty
     if (prompt.trim() === "") {
-      setError("Input cannot be empty!");
+      setError("Please input a question.");
       return; 
     }
 
@@ -45,7 +45,7 @@ function App() {
       if (mockDataTyped.tutorials[prompt]) {
         setResponse(mockDataTyped.tutorials[prompt]);
       } else {
-        setResponse("No tutorial found (offline).");
+        setResponse("No tutorial found.");
       }
     }
   };
