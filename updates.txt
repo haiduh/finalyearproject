@@ -1,4 +1,4 @@
-- Need to add either a pdf for context, json file.
+- Need to add either a pdf for context, json file. ✅
 - Use a UI (i.e, Tauri Overlay) to import that pdf, but for testing purposes, should create one.
 - Whatever answer is generated, note that down into the vector database with the question 
   that was asked for quicker responses, along with the links that were used to generate it.
@@ -11,3 +11,7 @@ For a later date:
 
 - Add a contextual tips, i.e, recommendation system, which will pop up from time to time based
   on the scenario.
+
+
+- Added a hash system instead of a unique id system for the vector search to prevent 
+  multiple upserts of the same thing.
