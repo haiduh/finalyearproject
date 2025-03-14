@@ -1,0 +1,85 @@
+import React, { useState } from 'react';
+import './css/overlay.css';
+
+function App() {
+  const [response, setResponse] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [gameName, setGameName] = useState(""); // Added state for game name
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); // To store error messages
+
+  // Function to ask a question to the backend API
+  const askQuestion = async (question: string, gameName: string) => {
+    const response = await fetch('http://localhost:8000/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: question, gameName: gameName }), // Fixed to send both parameters properly
+    });
+    return await response.json();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();  
+    
+    setError("");
+    setResponse("");
+    setLoading(true);
+
+    if (prompt.trim() === "") {
+      setError("Please input a question.");
+      setLoading(false);
+      return; 
+    }
+
+    if (gameName.trim() === "") {
+      setError("Please enter a game name.");
+      setLoading(false);
+      return;
+    }
+
+    // Combine the prompt and game name
+    const combinedQuestion = `${prompt} ${gameName}`;
+
+    try {
+      const data = await askQuestion(combinedQuestion, gameName); // Pass both parameters
+
+      if (data) {
+        setResponse(data.response); 
+      }
+    } catch (err) {
+      setError("Error connecting to server");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="overlay">
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Ask for help..."
+        />
+        <input
+          type="text"
+          value={gameName}
+          onChange={(e) => setGameName(e.target.value)}
+          placeholder="Enter game name..."
+        />
+        <button 
+          type="submit" 
+          className="bg-blue-500 text-white p-2 rounded"
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Submit'}
+        </button>
+      </form>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <p>{response}</p>
+    </div>
+  );
+}
+
+export default App;

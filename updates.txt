@@ -1,17 +1,21 @@
 - Need to add either a pdf for context, json file. ✅
 - Use a UI (i.e, Tauri Overlay) to import that pdf, but for testing purposes, should create one.
 - Whatever answer is generated, note that down into the vector database with the question 
-  that was asked for quicker responses, along with the links that were used to generate it.
-- Add game detection so that the answer is only based on the game.
-- Add more detailed responses. (e.g step-by-step walkthroughs)
+  that was asked for quicker responses, along with the links that were used to generate it.⚠️
+- Add game detection so that the answer is only based on the game. 
+- Add more detailed responses. (e.g step-by-step walkthroughs) ✅
 - Add to the Tauri Overlay, the overlay should act like a chatbot, with responses staying and
   being able to scroll back to them.
 
 For a later date:
 
 - Add a contextual tips, i.e, recommendation system, which will pop up from time to time based
-  on the scenario.
+  on the scenario. 
 
 
 - Added a hash system instead of a unique id system for the vector search to prevent 
-  multiple upserts of the same thing.
+  multiple upserts of the same thing. ✅
+
+- Need to add a LLM that decides whether detailed answer is need or not.
+
+- Needs to have game specific advice.

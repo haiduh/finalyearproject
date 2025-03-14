@@ -1,0 +1,4 @@
+- Compare differnt LLM models (e.g., Hugging Face, GPT-4)
+- Compare RAG systems with traditional Machine Learning systems.
+- Maybe fine-tune your own model.
+- Justify the selection of DDGS compared to other API's that are available.

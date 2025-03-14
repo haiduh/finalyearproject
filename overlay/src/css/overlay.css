@@ -15,3 +15,71 @@
     margin-bottom: 20px;     /* Space between button and response */
   }
   
+  .response-container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  
+  .response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .response-close-button button {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+  }
+  
+  .response-content {
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #f7fafc;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .response-content p {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #333;
+  }
+  
+  .response-content p:first-child {
+    margin-top: 0;
+  }
+  
+  .response-content p code {
+    background-color: #e2e8f0;
+    padding: 0.2rem 0.5rem;
+    font-family: monospace;
+  }
+  
+  .response-content ul {
+    margin-left: 20px;
+  }
+  
+  .response-content ul li {
+    list-style-type: disc;
+    margin-bottom: 0.5rem;
+  }
+  
+  .response-content .highlight {
+    background-color: #d1fae5;
+    padding: 0.2rem;
+  }
+  
+  .response-content p {
+    transition: opacity 0.3s ease-in-out;
+    opacity: 0;
+  }
+  
+  .response-content p {
+    opacity: 1;
+  }
+  
+
+  @import "tailwindcss";

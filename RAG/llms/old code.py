@@ -318,6 +318,3 @@ def response_generation(question):
 question = input("Enter a Question: ")
 response = response_generation(question)
 print("🤖 AI Response:", response)
-
-
-

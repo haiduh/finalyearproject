@@ -1,0 +1,5 @@
+- RAG implementation.
+- Agentic
+- Chain of Thought
+- Expanding the Query (Minimal Prompt Chaining)
+- Validation Response.

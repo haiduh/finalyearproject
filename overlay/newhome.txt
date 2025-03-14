@@ -1,0 +1,129 @@
+s// src/App.tsx
+import React, { useState } from 'react';
+import './App.css';
+import GameInfoDisplay from './GameInfoDisplay';
+import { parseGameInfo, GameInfo } from './GameInfoParser';
+
+function App() {
+  const [response, setResponse] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [gameName, setGameName] = useState(""); 
+  const [error, setError] = useState("");
+  const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showRawResponse, setShowRawResponse] = useState(false);
+
+  // Function to ask a question to the backend API
+  const askQuestion = async (combinedQuestion: string) => {
+    const response = await fetch('http://localhost:8000/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: combinedQuestion }),
+    });
+    return await response.json();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();  
+    
+    setError("");
+    setResponse("");
+    setGameInfo(null);
+    setLoading(true);
+
+    if (prompt.trim() === "") {
+      setError("Please input a question.");
+      setLoading(false);
+      return; 
+    }
+
+    if (gameName.trim() === "") {
+      setError("Please enter a game name.");
+      setLoading(false);
+      return;
+    }
+
+    // Combine the prompt and game name
+    const combinedQuestion = `${prompt} ${gameName}`;
+
+    try {
+      const data = await askQuestion(combinedQuestion);
+
+      if (data && data.response) {
+        // Store the raw response
+        setResponse(data.response);
+        
+        // Try to parse the structured info
+        try {
+          const parsedInfo = parseGameInfo(prompt, gameName, data.response);
+          setGameInfo(parsedInfo);
+        } catch (parseError) {
+          console.error("Error parsing game info:", parseError);
+          setError("Could not structure the response. Showing raw output.");
+          setShowRawResponse(true);
+        }
+      } else {
+        setError("Received empty response from server");
+        setShowRawResponse(true);
+      }
+    } catch (err) {
+      setError("Error connecting to server");
+      setShowRawResponse(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  return (
+    <div className="overlay">
+      <form onSubmit={handleSubmit} className="mb-4">
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Ask for help..."
+          className="p-2 mr-2 rounded"
+        />
+        <input
+          type="text"
+          value={gameName}
+          onChange={(e) => setGameName(e.target.value)}
+          placeholder="Enter game name..."
+          className="p-2 mr-2 rounded"
+        />
+        <button 
+          type="submit" 
+          className="bg-blue-500 text-white p-2 rounded"
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Submit'}
+        </button>
+      </form>
+      
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      
+      {gameInfo && <GameInfoDisplay info={gameInfo} />}
+      
+      {/* Toggle to show raw response */}
+      {response && (
+        <div className="mt-4">
+          <button 
+            onClick={() => setShowRawResponse(!showRawResponse)}
+            className="text-sm bg-gray-600 text-white p-1 rounded"
+          >
+            {showRawResponse ? "Hide Raw Response" : "Show Raw Response"}
+          </button>
+          
+          {showRawResponse && (
+            <pre className="mt-2 p-3 bg-gray-700 rounded text-white overflow-auto max-h-60">
+              {response}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;

@@ -1,0 +1,9 @@
+body {
+  -webkit-app-region: drag;
+  background-color: transparent;
+  display: flex;
+  cursor: pointer;
+  justify-content: space-between;
+  color: aqua;
+  user-select: none;
+}
