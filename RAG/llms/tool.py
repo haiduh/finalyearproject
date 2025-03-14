@@ -306,12 +306,9 @@ def response_generation(question):
     
     if decision == "1":  # If the context can answer the question
         print("Context can answer the question")
-        # Optionally, run Chain-of-Thought analysis before generating response
-        reasoning = cot_analysis(question, context)
-        print("CoT Reasoning: ", reasoning)
-        
+
         response = completion(
-            model="gpt-4-turbo",
+            model="gpt-3.5-turbo",
             messages=[
                 {"content": system_prompt.format(context=context), "role": "system"},
                 {"content": user_prompt.format(question=question), "role": "user"}
@@ -332,6 +329,12 @@ def response_generation(question):
         
         context = format_search_results(results)
         print("Found online sources. Generating the response...")
+
+        # Optionally, run Chain-of-Thought analysis before generating response
+        reasoning = cot_analysis(question, context)
+        print("CoT Reasoning: ", reasoning)
+        
+
         response = completion(
             model="gpt-4-turbo",
             messages=[

@@ -1,1 +1,0 @@
-(()=>{"use strict";var e={157:e=>{e.exports=require("electron")}},r={};function t(o){var n=r[o];if(void 0!==n)return n.exports;var c=r[o]={exports:{}};return e[o](c,c.exports,t),c.exports}(()=>{const e=t(157);e.contextBridge.exposeInMainWorld("electron",{toggleClickThrough:r=>{e.ipcRenderer.send("toggle-click-through",r)}})})()})();
