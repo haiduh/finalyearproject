@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+const { ipcRenderer } = window.require('electron');
 
 export default function App() {
   const [response, setResponse] = useState("");
@@ -12,7 +13,9 @@ export default function App() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [pdfUploaded, setPdfUploaded] = useState(false);
   const [pdfName, setPdfName] = useState("");
+  const [isOverlay, setIsOverlay] = useState(false);
   const fileInputRef = useRef(null);
+  
 
   // Function to ask a question to the backend API
   const askQuestion = async (question, gameName, isPdfMode) => {
@@ -164,6 +167,16 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    ipcRenderer.on('overlay-toggled', (_, state) => {
+      setIsOverlay(state);
+    })
+  });
+
+  const toggleOverlay = () => {
+    ipcRenderer.send('toggle-overlay');
+  };
+
   const triggerFileInput = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
@@ -180,6 +193,11 @@ export default function App() {
   return (
     <div className="text-white p-4">
       <div className={'font-bold text-white drag-handle mb-4'}>&#1006;</div>
+      <div>
+        <button onClick={toggleOverlay}>
+        {isOverlay ? 'Exit Overlay Mode' : 'Enter Overlay Mode'}
+      </button>
+      </div>
       
       <div className="bg-zinc-900 rounded-lg p-4 shadow-lg">
         {pdfUploaded ? (

@@ -9,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
+import pygetwindow as gw
 import psutil
 import requests
 import json
@@ -453,36 +454,57 @@ def process_pdf_content(pdf_content, pdf_name, temp_file_path):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
+
 @app.get("/detect_game")
 async def detect_game():
-    """Detect the current running game"""
-    game = detecting_game()
-    return {"gameName": game}
+    game_name = get_active_window_name()
+    print(f"Current game: {game_name}")  # Add this line
+    if not game_name:
+        return {"gameName": ""}
 
-def detecting_game():
-    """A function to detect the game that is currently on"""
-    game_processes = {
-        "eldenring.exe": "Elden Ring",
-        "RocketLeague.exe": "Rocket League",
-        "GTA5.exe": "Grand Theft Auto V",
-        "csgo.exe": "Counter-Strike 2",
-        "Cyberpunk2077.exe": "Cyberpunk 2077",
-        "FortniteClient-Win64-Shipping.exe": "Fortnite",
-        "Overwatch.exe": "Overwatch 2",
-        "VALORANT.exe": "VALORANT",
-        "LeagueofLegends.exe": "League of Legends",
-        "Minecraft.exe": "Minecraft",
-    }
+    # Optional: Filter out known non-game applications
+    common_apps = ["Google Chrome", "Discord", "Spotify", "File Explorer"]
+    if any(app in game_name for app in common_apps):  # Use game_name here
+        return {"gameName": ""}
 
-    for proc in psutil.process_iter(['name']):
-        try:
-            process_name = proc.info['name']
-            if process_name in game_processes:
-                return game_processes[process_name]
-        except:
-            pass
+    return {"gameName": game_name}
 
-    return ""
+def get_active_window_name():
+    try:
+        active_window = gw.getActiveWindow()
+        if active_window:
+            print(f"Detected window title: {active_window.title}")  # Add this line
+            return active_window.title
+    except:
+        return None
+    return None
+
+
+
+# def detecting_game():
+#     """A function to detect the game that is currently on"""
+#     game_processes = {
+#         "eldenring.exe": "Elden Ring",
+#         "RocketLeague.exe": "Rocket League",
+#         "GTA5.exe": "Grand Theft Auto V",
+#         "csgo.exe": "Counter-Strike 2",
+#         "Cyberpunk2077.exe": "Cyberpunk 2077",
+#         "FortniteClient-Win64-Shipping.exe": "Fortnite",
+#         "Overwatch.exe": "Overwatch 2",
+#         "VALORANT.exe": "VALORANT",
+#         "LeagueofLegends.exe": "League of Legends",
+#         "Minecraft.exe": "Minecraft",
+#     }
+
+#     for proc in psutil.process_iter(['name']):
+#         try:
+#             process_name = proc.info['name']
+#             if process_name in game_processes:
+#                 return game_processes[process_name]
+#         except:
+#             pass
+
+#     return ""
 
 # Health check endpoint
 @app.get("/health")

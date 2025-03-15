@@ -1,60 +1,21 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain } = require('electron');
 const path = require('node:path');
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
-}
+ipcMain.setMaxListeners(20);
 
-const createWindow = () => {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 450,
-    height: 600,
-    frame: false, // Frameless window for clean overlay appearance
-    transparent: true, // Allows for rounded corners and transparency
-    alwaysOnTop: true, // Keeps the overlay above the game
-    resizable: true, // Allow users to resize if needed
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+let mainWindow;
+let isOverlay = false;
 
-    // Set Content Security Policy
-    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [
-            "default-src 'self'; " +
-            "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-            "style-src 'self' 'unsafe-inline'; " +
-            "img-src 'self' data: https:; " +
-            "font-src 'self' data:;"
-          ]
-        }
-      });
-    });
-
-  // and load the index.html of the app.
-  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
-
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
-};
-
-
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
 
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // Register a global shortcut for toggling overlay mode
+  globalShortcut.register('F2', () => {
+    if (mainWindow) {
+      toggleOverlayMode();
+    }
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -62,14 +23,84 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+const createWindow = () => {
+  mainWindow = new BrowserWindow({
+    width: 450,
+    height: 600,
+    frame: false, // Frameless window for clean overlay appearance
+    transparent: true, // Allows for rounded corners and transparency
+    alwaysOnTop: false, // Keeps the overlay above the game
+    resizable: true, // Allow users to resize if needed
+    skipTaskbar: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Set Content Security Policy
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "img-src 'self' data: https:; " +
+          "font-src 'self' data:;"
+        ]
+      }
+    });
+  });
+
+  // Load the UI
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY); // Change to your frontend entry point
+
+  // Open DevTools for debugging (remove in production)
+  mainWindow.webContents.openDevTools();
+};
+
+function toggleOverlayMode() {
+  if (!mainWindow) return;
+
+  isOverlay = !isOverlay; // Toggle overlay state
+
+  if (isOverlay) {
+    // Enable overlay mode
+    mainWindow.show(); // Ensure window is visible
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    mainWindow.setIgnoreMouseEvents(false);
+    mainWindow.setResizable(false);
+    mainWindow.setSkipTaskbar(true);
+    mainWindow.setOpacity(0.8); // Slight transparency
+    mainWindow.setBackgroundColor('#00000000'); // Fully transparent
+  } else {
+    // Exit overlay mode and hide the window
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setSkipTaskbar(false);
+    mainWindow.minimize(); // Minimizes instead of closing
+    mainWindow.setOpacity(1);
+  }
+
+  // Send the updated overlay state to renderer
+  mainWindow.webContents.send('overlay-toggled', isOverlay);
+}
+
+// Listen for IPC event to toggle overlay mode
+ipcMain.on('toggle-overlay', () => {
+  toggleOverlayMode();
+});
+
+// Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
