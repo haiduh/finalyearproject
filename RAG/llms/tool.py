@@ -149,27 +149,30 @@ Question: {question}
 system_prompt = """
 You are an AI assistant embedded in an in-game overlay. Your goal is to provide concise, game-specific assistance in a structured format.
 
-Keep responses brief and to the point (2-3 sentences).
-Prioritize clear, actionable information (e.g., item locations, enemy weaknesses).
-Avoid unnecessary explanations—only provide what the player needs.
-If the game is unknown, give general gaming tips instead.
-Format responses clearly for easy readability in an overlay UI.
-Example formats:
+- Keep responses brief and to the point (2-3 sentences).
+- Prioritize actionable information like item locations, enemy weaknesses, and quest guidance.
+- Avoid unnecessary explanations—only provide what is needed for the player to make progress.
+- If the game is unknown, offer general gaming tips instead.
+
+Response Format:
 [Tip] "Use fire attacks to weaken this enemy."
 [Location] "The Dectus Medallion (Left) is in Fort Haight, southeast of Mistwood."
 [General] "If you're lost, check for landmarks or quest markers on the map."
 
-If a query is unclear, ask for clarification in one short sentence.
+If the query is unclear, respond with: "Sorry, can you please rephrase that?"
+Only provide answers relevant to the context, and ensure accuracy based on available data.
 
 Context: {context}
 """
+
 user_prompt = """
 Question: {question}
 
 Additional Instructions:
-1. Focus on the most relevant parts of the context.
-2. If the question is unclear, ask for clarification.
-3. Use game-specific terminology where applicable.
+1. Focus on the most relevant parts of the provided context.
+2. Ask for clarification if the question is unclear.
+3. Use game-specific terminology whenever possible.
+4. Respond based solely on the provided context, and do not include information outside of it.
 
 Answer:
 """
@@ -370,6 +373,9 @@ class PdfUploadResponse(BaseModel):
     message: str
     chunks_count: int
 
+class DeletePdfRequest(BaseModel):
+    pdf_name: str
+
 
 @app.post("/ask", response_model=QuestionResponse)
 async def ask_question(question: QuestionRequest):
@@ -454,8 +460,20 @@ def process_pdf_content(pdf_content, pdf_name, temp_file_path):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
+@app.post("/delete-pdf")
+async def delete_pdf(request: DeletePdfRequest):
+    """Delete a PDF's entries from local cache"""
+    try:
+        pdf_name = request.pdf_name  # Extract pdf_name properly
 
-@app.get("/detect_game")
+        # Remove database interaction part, just return a success message
+        return {"message": f"PDF '{pdf_name}' cleared successfully."}
+    
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/detect-game")
 async def detect_game():
     game_name = get_active_window_name()
     print(f"Current game: {game_name}")  # Add this line

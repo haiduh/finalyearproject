@@ -54,7 +54,7 @@ export default function App() {
     
     setIsDetecting(true);
     try {
-      const response = await fetch('http://localhost:8000/detect_game', {
+      const response = await fetch('http://localhost:8000/detect-game', {
         method: 'GET',
       });
       const data = await response.json();
@@ -135,19 +135,19 @@ export default function App() {
       setUploadStatus("Please select a PDF file.");
       return;
     }
-
+  
     setUploading(true);
     setUploadStatus("Uploading PDF...");
-
+  
     const formData = new FormData();
     formData.append('file', file);
-
+  
     try {
       const response = await fetch('http://localhost:8000/upload-pdf', {
         method: 'POST',
         body: formData,
       });
-
+  
       const data = await response.json();
       
       if (response.ok) {
@@ -157,6 +157,9 @@ export default function App() {
         setGameName("");
         setManualEntry(false);
         setError("");
+        
+        // 🛠️ Reset file input to allow re-uploading the same file
+        document.getElementById("pdf-upload-input").value = "";
       } else {
         setUploadStatus(`Upload failed: ${data.error || 'Unknown error'}`);
       }
@@ -167,11 +170,51 @@ export default function App() {
     }
   };
 
+  const clearPdf = async () => {
+    if (!pdfName) {
+      setUploadStatus("No PDF selected to clear.");
+      return;
+    }
+  
+    setUploadStatus("Clearing uploaded PDF...");
+  
+    try {
+      const response = await fetch('http://localhost:8000/delete-pdf', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdf_name: pdfName }),
+      });
+  
+      const data = await response.json();
+  
+      if (response.ok) {
+        setPdfUploaded(false);
+        setPdfName("");
+        setUploadStatus(`PDF cleared successfully.`);
+      } else {
+        setUploadStatus(`Failed to clear PDF: ${data.error || "Unknown error"}`);
+      }
+    } catch (err) {
+      console.error("Error clearing PDF:", err);
+      setUploadStatus("Error connecting to server.");
+    }
+  };
+  
+  
+
   useEffect(() => {
+    // Add the event listener
     ipcRenderer.on('overlay-toggled', (_, state) => {
       setIsOverlay(state);
-    })
-  });
+    });
+    
+    // Clean up function to remove the listener when component unmounts
+    return () => {
+      ipcRenderer.removeListener('overlay-toggled', (_, state) => {
+        setIsOverlay(state);
+      });
+    };
+  }, []); // Empty dependency array means this runs once on mount
 
   const toggleOverlay = () => {
     ipcRenderer.send('toggle-overlay');
@@ -182,14 +225,8 @@ export default function App() {
       fileInputRef.current.click();
     }
   };
-
-  const clearPdf = () => {
-    setPdfUploaded(false);
-    setPdfName("");
-    setUploadStatus("");
-    detectGame();
-  };
-
+  
+  
   return (
     <div className="text-white p-4">
       <div className={'font-bold text-white drag-handle mb-4'}>&#1006;</div>
@@ -255,7 +292,8 @@ export default function App() {
           >
             {uploading ? 'Uploading...' : pdfUploaded ? 'Upload Different PDF' : 'Upload PDF'}
           </button>
-          <input 
+          <input
+            id="pdf-upload-input" 
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
@@ -275,10 +313,18 @@ export default function App() {
           />
           <button 
             type="submit" 
-            className="bg-blue-500 text-white p-2 rounded w-full"
+            className="bg-blue-500 text-white p-2 rounded w-full flex items-center justify-center"
             disabled={loading}
           >
-            {loading ? 'Thinking...' : 'Submit'}
+            {loading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Thinking...</span>
+              </>
+            ) : 'Submit'}
           </button>
         </form>
 

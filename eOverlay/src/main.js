@@ -1,7 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain } = require('electron');
-const path = require('node:path');
-
-ipcMain.setMaxListeners(20);
+const { app, BrowserWindow, globalShortcut, ipcMain} = require('electron');
 
 let mainWindow;
 let isOverlay = false;
@@ -39,7 +36,7 @@ const createWindow = () => {
     skipTaskbar: false,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
     }
   });
 
