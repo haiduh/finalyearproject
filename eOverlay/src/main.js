@@ -1,38 +1,72 @@
-const { app, BrowserWindow, globalShortcut, ipcMain} = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain } = require('electron');
 
+// Global references to prevent garbage collection
 let mainWindow;
+let devWindow;
 let isOverlay = false;
 
+// When Electron has finished initialization
 app.whenReady().then(() => {
-  createWindow();
+  createMainWindow();
 
-  // Register a global shortcut for toggling overlay mode
+  // Register a global shortcut for toggling overlay mode (F2)
   globalShortcut.register('F2', () => {
     if (mainWindow) {
       toggleOverlayMode();
     }
   });
 
+  // Register a shortcut to open the Developer Section (F3)
+  globalShortcut.register('F3', () => {
+    if (!devWindow) {
+      createDevWindow();
+    } else {
+      devWindow.focus();
+    }
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createMainWindow();
     }
   });
 });
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// Handle Electron auto-updates
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
-const createWindow = () => {
+// Function to apply CORS headers to a window
+const applyCORSHeaders = (window) => {
+  if (window) {
+    window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; " +
+            "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; " +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data: https:; " +
+            "font-src 'self' data:;"
+          ]
+        }
+      });
+    });
+  }
+};
+
+// Function to create the main application window
+const createMainWindow = () => {
   mainWindow = new BrowserWindow({
     width: 450,
-    height: 600,
-    frame: false, // Frameless window for clean overlay appearance
-    transparent: true, // Allows for rounded corners and transparency
-    alwaysOnTop: false, // Keeps the overlay above the game
-    resizable: true, // Allow users to resize if needed
+    height: 700,
+    frame: false, 
+    transparent: true, 
+    alwaysOnTop: false, 
+    resizable: true, 
     skipTaskbar: false,
     webPreferences: {
       nodeIntegration: true,
@@ -40,64 +74,87 @@ const createWindow = () => {
     }
   });
 
-  // Set Content Security Policy
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; " +
-          "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; " +
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-          "style-src 'self' 'unsafe-inline'; " +
-          "img-src 'self' data: https:; " +
-          "font-src 'self' data:;"
-        ]
-      }
-    });
-  });
+  applyCORSHeaders(mainWindow);
 
-  // Load the UI
-  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY); // Change to your frontend entry point
-
-  // Open DevTools for debugging (remove in production)
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.webContents.openDevTools();
 };
 
+// Function to create the developer window
+const createDevWindow = () => {
+  devWindow = new BrowserWindow({
+    width: 450,
+    height: 600,
+    title: "Developer Data Import",
+    show: false,
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    }
+  });
+
+  applyCORSHeaders(devWindow);
+
+  devWindow.loadURL(DEV_WINDOW_WEBPACK_ENTRY);
+
+  devWindow.once('ready-to-show', () => {
+    devWindow.show();
+  });
+
+  devWindow.webContents.openDevTools();
+
+  devWindow.on('closed', () => {
+    devWindow = null;
+  });
+};
+
+// Function to toggle the overlay mode
 function toggleOverlayMode() {
   if (!mainWindow) return;
 
-  isOverlay = !isOverlay; // Toggle overlay state
+  isOverlay = !isOverlay;
 
   if (isOverlay) {
-    // Enable overlay mode
-    mainWindow.show(); // Ensure window is visible
+    mainWindow.show();
     mainWindow.setAlwaysOnTop(true, 'screen-saver');
     mainWindow.setIgnoreMouseEvents(false);
     mainWindow.setResizable(false);
     mainWindow.setSkipTaskbar(true);
-    mainWindow.setOpacity(0.8); // Slight transparency
-    mainWindow.setBackgroundColor('#00000000'); // Fully transparent
+    mainWindow.setOpacity(0.8);
+    mainWindow.setBackgroundColor('#00000000');
   } else {
-    // Exit overlay mode and hide the window
     mainWindow.setAlwaysOnTop(false);
     mainWindow.setSkipTaskbar(false);
-    mainWindow.minimize(); // Minimizes instead of closing
+    mainWindow.minimize();
     mainWindow.setOpacity(1);
   }
 
-  // Send the updated overlay state to renderer
   mainWindow.webContents.send('overlay-toggled', isOverlay);
 }
 
-// Listen for IPC event to toggle overlay mode
+// IPC Communication handlers
 ipcMain.on('toggle-overlay', () => {
   toggleOverlayMode();
 });
 
-// Quit when all windows are closed, except on macOS.
+ipcMain.on('dev-message', (event, message) => {
+  console.log('Received from dev window:', message);
+  event.reply('dev-response', `Processed: ${message}`);
+
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('from-dev', message);
+  }
+});
+
+// Quit when all windows are closed, except on macOS
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Clean up when quitting
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });

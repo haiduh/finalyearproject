@@ -283,7 +283,6 @@ export default function App() {
             />
           </div>
         )}
-
         <div className="mb-4">
           <button
             onClick={triggerFileInput}
@@ -302,7 +301,6 @@ export default function App() {
           />
           {uploadStatus && <p className="mt-2 text-sm">{uploadStatus}</p>}
         </div>
-
         <form onSubmit={handleSubmit} className="mb-4">
           <input
             type="text"

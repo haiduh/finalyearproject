@@ -44,6 +44,14 @@ module.exports = {
                 js: './src/preload.js',
               },
             },
+            {
+              html: './src/dev.html', // Create this HTML file
+              js: './src/dev.jsx',    // Your dev window React component
+              name: 'dev_window',
+              preload: {
+                js: './src/preload.js', // Same or different preload script
+              },
+            }
           ],
         },
       },

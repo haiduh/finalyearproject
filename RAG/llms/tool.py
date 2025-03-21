@@ -473,29 +473,87 @@ async def delete_pdf(request: DeletePdfRequest):
         return {"error": str(e)}
 
 
+# Fixed endpoint function that calls the detection function
 @app.get("/detect-game")
 async def detect_game():
-    game_name = get_active_window_name()
-    print(f"Current game: {game_name}")  # Add this line
+    game_name = get_current_game()  # Call the renamed function
+    print(f"Current game: {game_name}")
     if not game_name:
         return {"gameName": ""}
-
-    # Optional: Filter out known non-game applications
-    common_apps = ["Google Chrome", "Discord", "Spotify", "File Explorer"]
-    if any(app in game_name for app in common_apps):  # Use game_name here
-        return {"gameName": ""}
-
+    
     return {"gameName": game_name}
 
-def get_active_window_name():
+# Rename the detection function to avoid naming conflict
+def get_current_game():
+    """Detect the currently running game using multiple methods"""
+    # First try process detection (more reliable for known games)
+    game_processes = {
+        "eldenring.exe": "Elden Ring",
+        "RocketLeague.exe": "Rocket League",
+        "GTA5.exe": "Grand Theft Auto V",
+        "csgo.exe": "Counter-Strike 2",
+        "Cyberpunk2077.exe": "Cyberpunk 2077",
+        "FortniteClient-Win64-Shipping.exe": "Fortnite",
+        "Overwatch.exe": "Overwatch 2",
+        "VALORANT.exe": "VALORANT", 
+        "LeagueofLegends.exe": "League of Legends",
+        "Minecraft.exe": "Minecraft",
+    }
+
+    # Check for known game processes
+    for proc in psutil.process_iter(['name']):
+        try:
+            process_name = proc.info['name']
+            if process_name in game_processes:
+                return game_processes[process_name]
+        except:
+            pass
+    
+    # Fallback to window title detection
     try:
         active_window = gw.getActiveWindow()
         if active_window:
-            print(f"Detected window title: {active_window.title}")  # Add this line
-            return active_window.title
-    except:
-        return None
-    return None
+            window_title = active_window.title
+            print(f"Detected window title: {window_title}")  # Debug output
+            
+            # Filter out common non-game applications
+            common_apps = ["Google Chrome", "Discord", "Spotify", "File Explorer", 
+                          "Microsoft", "Word", "Excel", "PowerPoint", "Visual Studio Code",
+                          "Notepad", "Explorer", "Settings", "Hello World!"]
+            
+            if any(app in window_title for app in common_apps):
+                return ""
+                
+            # Try to extract game name from window title
+            # Many games use formats like "Game Name - Other Info" or "Game Name | Other Info"
+            potential_game = window_title.split(' - ')[0].split(' | ')[0].strip()
+            
+            # Avoid returning very short or very long names
+            if 3 <= len(potential_game) <= 30:
+                return potential_game
+    except Exception as e:
+        print(f"Error detecting window: {str(e)}")
+        pass
+        
+    return ""
+
+
+#     # Optional: Filter out known non-game applications
+#     common_apps = ["Google Chrome", "Discord", "Spotify", "File Explorer"]
+#     if any(app in game_name for app in common_apps):  # Use game_name here
+#         return {"gameName": ""}
+
+#     return {"gameName": game_name}
+
+# def get_active_window_name():
+#     try:
+#         active_window = gw.getActiveWindow()
+#         if active_window:
+#             print(f"Detected window title: {active_window.title}")  # Add this line
+#             return active_window.title
+#     except:
+#         return None
+#     return None
 
 
 
