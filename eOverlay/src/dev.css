@@ -4,7 +4,7 @@
 
 .dev-container {
     padding: 1rem; 
-    background-color: #111827; ;
+    background-color: #000000; ;
     border-radius: 10px;
 }
 
@@ -12,4 +12,3 @@
     -webkit-app-region: drag;
     cursor: grab;
 }
-

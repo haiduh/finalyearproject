@@ -20,25 +20,12 @@ export default function App() {
         body: JSON.stringify({ 
           text: question, 
           gameName: gameName,
-          isPdfMode: false 
         }),
       });
       return await response.json();
     } catch (error) {
       console.error("Connection error details:", error);
       throw error;
-    }
-  };
-
-  const testConnection = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/ping');
-      const data = await response.json();
-      console.log("Connection successful:", data);
-      return true;
-    } catch (err) {
-      console.error("Connection test failed:", err);
-      return false;
     }
   };
 
@@ -128,12 +115,13 @@ export default function App() {
   
   return (
     <div className="text-white p-4">
+
       <div className={'font-bold text-white drag-handle mb-4'}>&#1006;</div>
-      <div>
-        <button onClick={toggleOverlay}>
-          {isOverlay ? 'Exit Overlay Mode' : 'Enter Overlay Mode'}
-        </button>
-      </div>
+        <div>
+          <button onClick={toggleOverlay}>
+            {isOverlay ? 'Exit Overlay Mode' : 'Enter Overlay Mode'}
+          </button>
+        </div>
       
       <div className="bg-zinc-900 rounded-lg p-4 shadow-lg">
         <div className="game-info mb-4">
