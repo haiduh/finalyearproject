@@ -59,9 +59,11 @@
   /* Game info section */
   .game-info {
     display: flex;
-    align-items: center;
+    align-items: center; /* Keeps text and buttons aligned vertically */
+    justify-content: space-between; /* Ensures the text is on the left and buttons on the right */
     margin-bottom: 10px;
   }
+  
   
   .refresh-button, .manual-button, .clear-pdf-button {
     margin-left: 10px;

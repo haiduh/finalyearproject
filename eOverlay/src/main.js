@@ -18,10 +18,11 @@ app.whenReady().then(() => {
 
   // Register a shortcut to open the Developer Section (F3)
   globalShortcut.register('F3', () => {
-    if (!devWindow) {
-      createDevWindow();
+    if (devWindow) {
+      devWindow.close();  // Close the window if it exists
+      devWindow = null;
     } else {
-      devWindow.focus();
+      createDevWindow();  // Create it if it doesn't exist
     }
   });
 
@@ -77,7 +78,7 @@ const createMainWindow = () => {
   applyCORSHeaders(mainWindow);
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 };
 
 // Function to create the developer window
@@ -88,6 +89,8 @@ const createDevWindow = () => {
     title: "Developer Data Import",
     show: false,
     resizable: true,
+    frame: false,
+    transparent: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -102,7 +105,7 @@ const createDevWindow = () => {
     devWindow.show();
   });
 
-  devWindow.webContents.openDevTools();
+  // devWindow.webContents.openDevTools();
 
   devWindow.on('closed', () => {
     devWindow = null;

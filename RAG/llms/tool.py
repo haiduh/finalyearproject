@@ -9,6 +9,11 @@ from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
+from typing import Optional
+from crawl4ai import AsyncWebCrawler
+from typing import Optional
+import datetime
+import requests
 import pygetwindow as gw
 import psutil
 import requests
@@ -77,19 +82,37 @@ app.add_middleware(
 load_dotenv()
 
 # Function to fetch content from a PDF file
-def fetch_pdf_content(pdf: str):
-    """Fetch content from a PDF file."""
-    reader = PdfReader(pdf)  # Use the variable 'pdf' for the file path
-    number_of_pages = len(reader.pages)
-    content = ""
+# def fetch_pdf_content(pdf: str):
+#     """Fetch content from a PDF file."""
+#     reader = PdfReader(pdf)  # Use the variable 'pdf' for the file path
+#     number_of_pages = len(reader.pages)
+#     content = ""
     
-    # Loop through each page and extract text
-    for page_num in range(number_of_pages):
-        page = reader.pages[page_num]
-        content += page.extract_text()
+#     # Loop through each page and extract text
+#     for page_num in range(number_of_pages):
+#         page = reader.pages[page_num]
+#         content += page.extract_text()
     
-    return content
+#     return content
 
+async def fetch_url_content(url: str) -> Optional[str]:
+    """
+    Fetches content from a URL using crawl4ai.
+    
+    Args:
+        url (str): The URL to fetch content from.
+        
+    Returns:
+        Optional[str]: The content retrieved from the URL as a string,
+                      or None if the request fails.
+    """
+    try:
+        async with AsyncWebCrawler() as crawler:
+            result = await crawler.arun(url=url)
+            return result.markdown if result else None
+    except Exception as e:
+        print(f"Error: Failed to fetch content from {url}. Exception: {str(e)}")
+        return None
 
 def clean_text(text: str) -> str:
     """Removes extra spaces and newlines."""
@@ -116,6 +139,59 @@ def get_embeddings(texts, model="text-embedding-3-small", api_key=OPENAI_API_KEY
     else:
         print(f"❌ Embedding Error {response.status_code}: {response.text}")
         return None
+    
+    # Background task to process uploaded file content
+def process_data_content(file_content, file_name, file_type, temp_file_path):
+    """Process file content in the background"""
+    try:
+        # Split text
+        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+            model_name="gpt-4",
+            chunk_size=150,  # Token size
+            chunk_overlap=20,  # Small overlap to maintain context between chunks
+        )
+        
+        # Clean and split text
+        text_chunks = [clean_text(chunk) for chunk in text_splitter.split_text(file_content)]
+        print(f"✅ Total Chunks from {file_type.upper()}: {len(text_chunks)}")
+        
+        # Generate embeddings
+        embeddings_objects = get_embeddings(text_chunks)
+        if embeddings_objects is None:
+            print(f"❌ Failed to generate embeddings for {file_name}.")
+            return
+        
+        # Upsert into Pinecone
+        vectors_to_upsert = []
+        for text, embedding in zip(text_chunks, embeddings_objects):
+            # Generate a hash for the content to be used as the vector ID
+            content_hash = generate_content_hash(text)
+            
+            # Check if this hash already exists in the Pinecone index
+            if not check_if_exists(index, content_hash):
+                # Prepare the record to upsert
+                record = {
+                    "id": content_hash,
+                    "values": embedding["embedding"],
+                    "metadata": {
+                        "source_text": text, 
+                        "file_name": file_name,
+                        "file_type": file_type
+                    }
+                }
+                vectors_to_upsert.append(record)
+        
+        # Batch upsert to Pinecone (more efficient)
+        if vectors_to_upsert:
+            index.upsert(vectors=vectors_to_upsert, namespace="game_docs")
+            print(f"✅ {len(vectors_to_upsert)} new chunks from {file_name} successfully inserted into Pinecone.")
+        else:
+            print(f"⚠️ No new content to insert from {file_name}.")
+    
+    finally:
+        # Clean up the temporary file - only if it exists and is not None
+        if temp_file_path is not None and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
 
 # Function to generate a hash for the content
@@ -159,7 +235,7 @@ Response Format:
 [Location] "The Dectus Medallion (Left) is in Fort Haight, southeast of Mistwood."
 [General] "If you're lost, check for landmarks or quest markers on the map."
 
-If the query is unclear, respond with: "Sorry, can you please rephrase that?"
+If the query is unclear, respond with: "Sorry, can you please rephrase that?", do not make stuff up.
 Only provide answers relevant to the context, and ensure accuracy based on available data.
 
 Context: {context}
@@ -360,6 +436,7 @@ def response_generation(question):
 
     return response_text
 
+#API classes and endpoints start
 
 class QuestionRequest(BaseModel):
     text: str
@@ -369,12 +446,16 @@ class QuestionResponse(BaseModel):
     response: str
     elapsed_time: float
 
-class PdfUploadResponse(BaseModel):
+class UploadResponse(BaseModel):
     message: str
     chunks_count: int
 
-class DeletePdfRequest(BaseModel):
-    pdf_name: str
+class DeleteDataRequest(BaseModel):
+    file_name: str
+    type: str
+
+class FetchURLcontent(BaseModel):
+    url: str
 
 
 @app.post("/ask", response_model=QuestionResponse)
@@ -386,89 +467,91 @@ async def ask_question(question: QuestionRequest):
     
     return QuestionResponse(response=response_text, elapsed_time=elapsed_time)
 
-@app.post("/upload-pdf", response_model=PdfUploadResponse)
-async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """Upload a PDF file and process it in the background"""
+@app.post("/upload-data", response_model=UploadResponse)
+async def upload_data(background_tasks: BackgroundTasks, file: UploadFile = File(...), type: str = Form(...)):
+    """Upload a file (PDF, JSON, CSV, Markdown) and process it in the background"""
     # Save the uploaded file temporarily
     temp_file_path = f"temp_{file.filename}"
     with open(temp_file_path, "wb") as buffer:
         buffer.write(await file.read())
     
-    # Extract content from PDF
-    pdf_name = file.filename
-    pdf_content = fetch_pdf_content(temp_file_path)
+    # Extract content based on file type
+    file_name = file.filename
+    file_content = ""
     
-    if not pdf_content:
+    try:
+        if type == "pdf":
+            # Use the PDF reader for PDF files
+            reader = PdfReader(temp_file_path)
+            number_of_pages = len(reader.pages)
+            
+            # Loop through each page and extract text
+            for page_num in range(number_of_pages):
+                page = reader.pages[page_num]
+                file_content += page.extract_text()
+        elif type in ["json", "csv", "markdown"]:
+            # For text-based files, simply read the content
+            with open(temp_file_path, "r") as f:
+                file_content = f.read()
+        else:
+            os.remove(temp_file_path)  # Clean up
+            return UploadResponse(message=f"Unsupported file type: {type}", chunks_count=0)
+    except Exception as e:
         os.remove(temp_file_path)  # Clean up
-        return PdfUploadResponse(message="No text could be extracted from the PDF", chunks_count=0)
+        return UploadResponse(message=f"Error reading file: {str(e)}", chunks_count=0)
     
-    # Process the PDF content in the background
-    background_tasks.add_task(process_pdf_content, pdf_content, pdf_name, temp_file_path)
+    if not file_content:
+        os.remove(temp_file_path)  # Clean up
+        return UploadResponse(message=f"No content could be extracted from the {type} file", chunks_count=0)
+    
+    # Process the file content in the background
+    background_tasks.add_task(process_data_content, file_content, file_name, type, temp_file_path)
     
     # Return a response immediately
-    return PdfUploadResponse(
-        message=f"PDF '{pdf_name}' uploaded and processing in background", 
-        chunks_count=len(pdf_content.split()) // 150  # Rough estimate of chunks
+    return UploadResponse(
+        message=f"{type.upper()} file '{file_name}' uploaded and processing in background", 
+        chunks_count=len(file_content.split()) // 150  # Rough estimate of chunks
     )
 
-# Background task to process PDF content
-def process_pdf_content(pdf_content, pdf_name, temp_file_path):
-    """Process PDF content in the background"""
-    try:
-        # Split text
-        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            model_name="gpt-4",
-            chunk_size=150,  # Token size
-            chunk_overlap=20,  # Small overlap to maintain context between chunks
-        )
-        
-        # Clean and split text
-        text_chunks = [clean_text(chunk) for chunk in text_splitter.split_text(pdf_content)]
-        print(f"✅ Total Chunks from PDF: {len(text_chunks)}")
-        
-        # Generate embeddings
-        embeddings_objects = get_embeddings(text_chunks)
-        if embeddings_objects is None:
-            print("❌ Failed to generate embeddings.")
-            return
-        
-        # Upsert into Pinecone
-        vectors_to_upsert = []
-        for text, embedding in zip(text_chunks, embeddings_objects):
-            # Generate a hash for the content to be used as the vector ID
-            content_hash = generate_content_hash(text)
-            
-            # Check if this hash already exists in the Pinecone index
-            if not check_if_exists(index, content_hash):
-                # Prepare the record to upsert
-                record = {
-                    "id": content_hash,
-                    "values": embedding["embedding"],
-                    "metadata": {"source_text": text, "pdf_name": pdf_name}
-                }
-                vectors_to_upsert.append(record)
-        
-        # Batch upsert to Pinecone (more efficient)
-        if vectors_to_upsert:
-            index.upsert(vectors=vectors_to_upsert, namespace="game_docs")
-            print(f"✅ {len(vectors_to_upsert)} new chunks successfully inserted into Pinecone.")
-        else:
-            print("⚠️ No new content to insert.")
+@app.post("/import-from-wiki", response_model=UploadResponse)
+async def import_from_wiki(background_tasks: BackgroundTasks, request: FetchURLcontent):
+    """Import content from a wiki URL and process it in the background"""
+    url = request.url
     
-    finally:
-        # Clean up the temporary file
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
-@app.post("/delete-pdf")
-async def delete_pdf(request: DeletePdfRequest):
-    """Delete a PDF's entries from local cache"""
-    try:
-        pdf_name = request.pdf_name  # Extract pdf_name properly
-
-        # Remove database interaction part, just return a success message
-        return {"message": f"PDF '{pdf_name}' cleared successfully."}
+    # Fetch content from URL using the existing GET endpoint
+    content = await fetch_url_content(url)
     
+    if not content:
+        return UploadResponse(message=f"Failed to fetch content from URL: {url}", chunks_count=0)
+    
+    # Extract domain as the "filename"
+    try:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc
+        file_name = f"{domain}_wiki"
+    except:
+        file_name = f"wiki_import_{int(time.time())}"
+    
+    # Process the wiki content in the background
+    background_tasks.add_task(process_data_content, content, file_name, "wiki", None)
+    
+    # Return a response immediately
+    return UploadResponse(
+        message=f"Wiki content from '{url}' is being processed in background", 
+        chunks_count=len(content.split()) // 150  # Rough estimate of chunks
+    )
+
+
+@app.post("/delete-data")
+async def delete_data(request: DeleteDataRequest):
+    """Clear the record of uploaded data"""
+    try:
+        file_name = request.file_name
+        file_type = request.type
+        
+        # Just return a success message to acknowledge deletion
+        return {"message": f"{file_type.upper()} '{file_name}' record cleared successfully."}
+
     except Exception as e:
         return {"error": str(e)}
 
@@ -585,8 +668,11 @@ def get_current_game():
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Check if the service is running"""
-    return {"status": "ok", "pinecone_connected": index is not None}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
 
 # Run the server
 if __name__ == "__main__":

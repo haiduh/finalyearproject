@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.dev-container {
+    padding: 1rem; 
+    background-color: #111827; ;
+    border-radius: 10px;
+}
+
+.drag-handle {
+    -webkit-app-region: drag;
+    cursor: grab;
+}
+

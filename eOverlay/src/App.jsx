@@ -9,16 +9,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState("");
-  const [pdfUploaded, setPdfUploaded] = useState(false);
-  const [pdfName, setPdfName] = useState("");
   const [isOverlay, setIsOverlay] = useState(false);
-  const fileInputRef = useRef(null);
-  
 
   // Function to ask a question to the backend API
-  const askQuestion = async (question, gameName, isPdfMode) => {
+  const askQuestion = async (question, gameName) => {
     try {
       const response = await fetch('http://localhost:8000/ask', {
         method: 'POST',
@@ -26,7 +20,7 @@ export default function App() {
         body: JSON.stringify({ 
           text: question, 
           gameName: gameName,
-          isPdfMode: isPdfMode 
+          isPdfMode: false 
         }),
       });
       return await response.json();
@@ -50,8 +44,6 @@ export default function App() {
 
   // Function to detect the current game from the backend
   const detectGame = async () => {
-    if (pdfUploaded) return;
-    
     setIsDetecting(true);
     try {
       const response = await fetch('http://localhost:8000/detect-game', {
@@ -78,10 +70,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!pdfUploaded) {
-      detectGame();
-    }
-  }, [pdfUploaded]);
+    detectGame();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();  
@@ -96,7 +86,7 @@ export default function App() {
       return; 
     }
 
-    if (!pdfUploaded && gameName.trim() === "") {
+    if (gameName.trim() === "") {
       setError("Please enter a game name.");
       setManualEntry(true);
       setLoading(false);
@@ -106,11 +96,7 @@ export default function App() {
     const combinedQuestion = `${prompt} ${gameName}`;
 
     try {
-      const data = await askQuestion(
-        combinedQuestion, 
-        pdfUploaded ? pdfName : gameName, 
-        pdfUploaded
-      );
+      const data = await askQuestion(combinedQuestion, gameName);
 
       if (data) {
         setResponse(data.response); 
@@ -121,86 +107,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-  // File handling functions
-  const handleFileChange = (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handlePdfUpload(files[0]);
-    }
-  };
-
-  const handlePdfUpload = async (file) => {
-    if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
-      setUploadStatus("Please select a PDF file.");
-      return;
-    }
-  
-    setUploading(true);
-    setUploadStatus("Uploading PDF...");
-  
-    const formData = new FormData();
-    formData.append('file', file);
-  
-    try {
-      const response = await fetch('http://localhost:8000/upload-pdf', {
-        method: 'POST',
-        body: formData,
-      });
-  
-      const data = await response.json();
-      
-      if (response.ok) {
-        setPdfUploaded(true);
-        setPdfName(file.name);
-        setUploadStatus(`PDF uploaded successfully: ${file.name}`);
-        setGameName("");
-        setManualEntry(false);
-        setError("");
-        
-        // 🛠️ Reset file input to allow re-uploading the same file
-        document.getElementById("pdf-upload-input").value = "";
-      } else {
-        setUploadStatus(`Upload failed: ${data.error || 'Unknown error'}`);
-      }
-    } catch (err) {
-      setUploadStatus("Error connecting to server for upload");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const clearPdf = async () => {
-    if (!pdfName) {
-      setUploadStatus("No PDF selected to clear.");
-      return;
-    }
-  
-    setUploadStatus("Clearing uploaded PDF...");
-  
-    try {
-      const response = await fetch('http://localhost:8000/delete-pdf', {
-        method: 'POST',
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdf_name: pdfName }),
-      });
-  
-      const data = await response.json();
-  
-      if (response.ok) {
-        setPdfUploaded(false);
-        setPdfName("");
-        setUploadStatus(`PDF cleared successfully.`);
-      } else {
-        setUploadStatus(`Failed to clear PDF: ${data.error || "Unknown error"}`);
-      }
-    } catch (err) {
-      console.error("Error clearing PDF:", err);
-      setUploadStatus("Error connecting to server.");
-    }
-  };
-  
-  
 
   useEffect(() => {
     // Add the event listener
@@ -219,41 +125,24 @@ export default function App() {
   const toggleOverlay = () => {
     ipcRenderer.send('toggle-overlay');
   };
-
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-  
   
   return (
     <div className="text-white p-4">
       <div className={'font-bold text-white drag-handle mb-4'}>&#1006;</div>
       <div>
         <button onClick={toggleOverlay}>
-        {isOverlay ? 'Exit Overlay Mode' : 'Enter Overlay Mode'}
-      </button>
+          {isOverlay ? 'Exit Overlay Mode' : 'Enter Overlay Mode'}
+        </button>
       </div>
       
       <div className="bg-zinc-900 rounded-lg p-4 shadow-lg">
-        {pdfUploaded ? (
-          <div className="pdf-info mb-4">
-            <span>Current PDF: {pdfName}</span>
-            <button 
-              onClick={clearPdf} 
-              className="bg-red-500 text-white p-1 rounded ml-2"
-            >
-              Clear PDF
-            </button>
-          </div>
-        ) : (
-          <div className="game-info mb-4">
-            {isDetecting ? (
-              <span>Detecting game...</span>
-            ) : (
-              <>
-                <span>Current game: {gameName || "Unknown"}</span>
+        <div className="game-info mb-4">
+          {isDetecting ? (
+            <span>Detecting game...</span>
+          ) : (
+            <>
+              <span>Current game: {gameName || ""}</span>
+              <div className="flex justify-end mt-2">
                 <button 
                   onClick={detectGame} 
                   className="bg-blue-500 text-white p-1 rounded mx-2"
@@ -265,14 +154,15 @@ export default function App() {
                   onClick={() => setManualEntry(!manualEntry)}
                   className="bg-green-500 text-white p-1 rounded"
                 >
-                  {manualEntry ? "Hide Manual Entry" : "Enter Manually"}
+                  {manualEntry ? "Hide Input" : "Enter Manually"}
                 </button>
-              </>
-            )}
-          </div>
-        )}
+              </div>
+            </>
+          )}
+        </div>
+        
 
-        {!pdfUploaded && manualEntry && (
+        {manualEntry && (
           <div className="mb-4">
             <input
               type="text"
@@ -283,30 +173,13 @@ export default function App() {
             />
           </div>
         )}
-        <div className="mb-4">
-          <button
-            onClick={triggerFileInput}
-            className="bg-purple-500 text-white p-2 rounded w-full"
-            disabled={uploading}
-          >
-            {uploading ? 'Uploading...' : pdfUploaded ? 'Upload Different PDF' : 'Upload PDF'}
-          </button>
-          <input
-            id="pdf-upload-input" 
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".pdf"
-            style={{ display: 'none' }}
-          />
-          {uploadStatus && <p className="mt-2 text-sm">{uploadStatus}</p>}
-        </div>
+        
         <form onSubmit={handleSubmit} className="mb-4">
           <input
             type="text"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder={pdfUploaded ? "Ask questions about your PDF" : "Ask for help..."}
+            placeholder="Ask for help..."
             className="w-full p-2 mb-2 border rounded bg-zinc-800 text-white"
           />
           <button 

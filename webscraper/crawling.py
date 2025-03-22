@@ -1,5 +1,4 @@
 import asyncio
-import json
 from crawl4ai import *
 
 user_input = input("Enter a website: ")
