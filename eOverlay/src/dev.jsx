@@ -1,31 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef} from 'react';
 import { createRoot } from 'react-dom/client';
-const { ipcRenderer } = window.require('electron');
 import './dev.css';
 
 function DevApp() {
-  const [input, setInput] = useState('');
-  const [logs, setLogs] = useState([]);
+
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
-  
-  // New state variables for multi-format data import
   const [dataUploaded, setDataUploaded] = useState(false);
   const [dataName, setDataName] = useState("");
   const [dataType, setDataType] = useState("");
   const [importType, setImportType] = useState("json");
-  const [wikiUrl, setWikiUrl] = useState("");
+  const [url, setUrl] = useState("");
+  const [showUrlInput, setShowUrlInput] = useState(false);
   
   const fileInputRef = useRef(null);
-
-  const sendMessage = () => {
-    if (input.trim()) {
-      // Example of sending a message to the main process
-      ipcRenderer.send('dev-message', input);
-      setLogs(prev => [...prev, `Sent: ${input}`]);
-      setInput('');
-    }
-  };
 
   const triggerFileInput = () => {
     if (fileInputRef.current) {
@@ -98,40 +86,54 @@ function DevApp() {
   };
   
 
-  const importFromWiki = async () => {
-    if (!wikiUrl.trim()) {
+  const importFromUrl = async () => {
+    if (!url.trim()) {
       setUploadStatus("Please enter a valid URL.");
       return;
     }
     
     setUploading(true);
-    setUploadStatus("Importing data from wiki...");
+    setUploadStatus("Importing data from URL...");
     
     try {
-      const response = await fetch('http://localhost:8000/import-from-wiki', {
+      const response = await fetch('http://localhost:8000/import-from-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: wikiUrl }),
+        body: JSON.stringify({ url: url }),
       });
       
+      // Parse the response JSON
       const data = await response.json();
       
-      if (response.ok) {
-        setDataUploaded(true);
-        setDataName(new URL(wikiUrl).hostname);
-        setDataType('WIKI');
-        setUploadStatus(`Wiki data imported successfully from: ${wikiUrl}`);
-        setWikiUrl("");
-      } else {
-        setUploadStatus(`Wiki import failed: ${data.error || 'Unknown error'}`);
+      // Check if the response is not OK (status code is not in 200-299 range)
+      if (!response.ok) {
+        // Use the error message from the backend or provide a generic error
+        const errorMessage = data.message || data.error || `URL import failed with status ${response.status}`;
+        setUploadStatus(`Error: ${errorMessage}`);
+        setUploading(false);
+        return;
       }
+      
+      setDataUploaded(true);
+      setDataName(new URL(url).hostname);
+      setDataType('URL');
+      setUploadStatus(`URL data imported successfully from: ${url}`);
+      setUrl("");
+      setShowUrlInput(false); // Hide URL input after successful import
     } catch (err) {
-      console.error("Error importing from wiki:", err);
-      setUploadStatus("Error connecting to server for wiki import");
+      console.error("Error importing from URL:", err);
+      
+      // Provide a more detailed error message
+      const errorMessage = err instanceof TypeError 
+        ? "Network error. Please check your connection." 
+        : "Unexpected error during URL import";
+      
+      setUploadStatus(`Error: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
   };
+
 
   const clearData = async () => {
     if (!dataName) {
@@ -160,7 +162,11 @@ function DevApp() {
         setDataUploaded(false);
         setDataName("");
         setDataType("");
-        setUploadStatus(`Data cleared successfully.`);
+        setUploadStatus(""); 
+        
+        // Reset URL input state
+        setUrl("");
+        setShowUrlInput(false);
       } else {
         setUploadStatus(`Failed to clear data: ${data.error || "Unknown error"}`);
       }
@@ -197,40 +203,58 @@ function DevApp() {
         <div className="mb-2">
           <select 
             value={importType} 
-            onChange={(e) => setImportType(e.target.value)}
+            onChange={(e) => {
+              setImportType(e.target.value);
+              setUploadStatus(""); // Clear status when import type changes
+            }}
             className="p-2 border rounded mr-2"
           >
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
             <option value="pdf">PDF</option>
             <option value="markdown">Markdown</option>
-            <option value="url">Wiki URL</option>
+            <option value="url">URL</option>
           </select>
           
-          <button
-            onClick={triggerFileInput}
-            className="bg-purple-500 text-white p-2 rounded"
-            disabled={uploading || importType === 'url'}
-          >
-            {uploading ? 'Importing...' : dataUploaded ? 'Import Different Data' : 'Import Data'}
-          </button>
+          {importType !== 'url' && (
+            <button
+              onClick={triggerFileInput}
+              className="bg-purple-500 text-white p-2 rounded"
+              disabled={uploading}
+            >
+              {uploading ? 'Importing...' : dataUploaded ? 'Import Different Data' : 'Import Data'}
+            </button>
+          )}
           
           {importType === 'url' && (
             <div className="mt-2">
-              <input
-                type="text"
-                placeholder="Enter wiki URL to import..."
-                className="p-2 border rounded mr-2 w-full"
-                value={wikiUrl}
-                onChange={(e) => setWikiUrl(e.target.value)}
-              />
-              <button
-                onClick={importFromWiki}
-                className="bg-blue-500 text-white p-2 rounded mt-2"
-                disabled={!wikiUrl.trim() || uploading}
-              >
-                Import from Wiki
-              </button>
+              {(!dataUploaded || showUrlInput) && (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Enter URL to import..."
+                    className="p-2 border rounded mr-2 w-full"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
+                  <button
+                    onClick={importFromUrl}
+                    className="bg-purple-500 text-white p-2 rounded mt-2"
+                    disabled={!url.trim() || uploading}
+                  >
+                    Import from URL
+                  </button>
+                </div>
+              )}
+              
+              {dataUploaded && !showUrlInput && (
+                <button
+                  onClick={() => setShowUrlInput(true)}
+                  className="bg-purple-500 text-white p-2 rounded"
+                >
+                  Import Different URL
+                </button>
+              )}
             </div>
           )}
         </div>

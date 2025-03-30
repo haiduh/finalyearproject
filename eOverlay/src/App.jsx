@@ -1,36 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 const { ipcRenderer } = window.require('electron');
 
 export default function App() {
-  const [response, setResponse] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [gameName, setGameName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [manualEntry, setManualEntry] = useState(false);
-  const [isOverlay, setIsOverlay] = useState(false);
-
-  // Function to ask a question to the backend API
-  const askQuestion = async (question, gameName) => {
-    try {
-      const response = await fetch('http://localhost:8000/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: question, 
-          gameName: gameName,
-        }),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("Connection error details:", error);
-      throw error;
-    }
-  };
+  const [response, setResponse] = useState(""); 
+  const [prompt, setPrompt] = useState(""); 
+  const [gameName, setGameName] = useState(""); 
+  const [loading, setLoading] = useState(false); 
+  const [error, setError] = useState(""); 
+  const [isDetecting, setIsDetecting] = useState(false); 
+  const [manualEntry, setManualEntry] = useState(false); 
+  const [isOverlay, setIsOverlay] = useState(false); 
 
   // Function to detect the current game from the backend
   const detectGame = async () => {
+    setError(""); // Clear error when detecting
     setIsDetecting(true);
     try {
       const response = await fetch('http://localhost:8000/detect-game', {
@@ -59,6 +42,24 @@ export default function App() {
   useEffect(() => {
     detectGame();
   }, []);
+
+  // Function to ask a question to the backend API
+  const askQuestion = async (question, gameName) => {
+    try {
+      const response = await fetch('http://localhost:8000/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          text: question, 
+          gameName: gameName,
+        }),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Connection error details:", error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();  
@@ -96,18 +97,16 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Add the event listener
     ipcRenderer.on('overlay-toggled', (_, state) => {
       setIsOverlay(state);
     });
-    
-    // Clean up function to remove the listener when component unmounts
+  
     return () => {
       ipcRenderer.removeListener('overlay-toggled', (_, state) => {
         setIsOverlay(state);
       });
     };
-  }, []); // Empty dependency array means this runs once on mount
+  }, []); 
 
   const toggleOverlay = () => {
     ipcRenderer.send('toggle-overlay');
@@ -132,14 +131,20 @@ export default function App() {
               <span>Current game: {gameName || ""}</span>
               <div className="flex justify-end mt-2">
                 <button 
-                  onClick={detectGame} 
+                  onClick={() => {
+                    setError(""); // Clear error when refreshing
+                    detectGame();
+                  }} 
                   className="bg-blue-500 text-white p-1 rounded mx-2"
                   disabled={isDetecting}
                 >
                   Refresh
                 </button>
                 <button
-                  onClick={() => setManualEntry(!manualEntry)}
+                  onClick={() => {
+                    setError(""); // Clear error when toggling manual entry
+                    setManualEntry(!manualEntry);
+                  }}
                   className="bg-green-500 text-white p-1 rounded"
                 >
                   {manualEntry ? "Hide Input" : "Enter Manually"}
@@ -155,7 +160,10 @@ export default function App() {
             <input
               type="text"
               value={gameName}
-              onChange={(e) => setGameName(e.target.value)}
+              onChange={(e) => {
+                setGameName(e.target.value);
+                setError(""); // Clear error when modifying game name
+              }}
               placeholder="Enter game name manually..."
               className="w-full p-2 mb-2 border rounded bg-zinc-800 text-white"
             />
@@ -166,7 +174,10 @@ export default function App() {
           <input
             type="text"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              setError(""); // Clear error when modifying prompt
+            }}
             placeholder="Ask for help..."
             className="w-full p-2 mb-2 border rounded bg-zinc-800 text-white"
           />
@@ -193,7 +204,13 @@ export default function App() {
           <div className="flex justify-between items-center mb-2">
             <span className="font-bold text-xl">Response</span>
             {response && (
-              <button onClick={() => setResponse('')} className="bg-red-500 text-white p-1 rounded text-sm">
+              <button 
+                onClick={() => {
+                  setResponse('');
+                  setError(''); // Clear error when clearing response
+                }} 
+                className="bg-red-500 text-white p-1 rounded text-sm"
+              >
                 Clear
               </button>
             )}

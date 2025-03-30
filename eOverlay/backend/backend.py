@@ -4,16 +4,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import Pinecone, ServerlessSpec
 from litellm import completion
 from dotenv import load_dotenv
-from duckduckgo_search import DDGS  # Keep web search capability
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
+from duckduckgo_search import DDGS
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from pydantic import BaseModel
-from typing import Optional
 from crawl4ai import AsyncWebCrawler
-from typing import Optional
+from urllib.parse import urlparse
+import logging
 import datetime
-import requests
 import pygetwindow as gw
 import psutil
 import requests
@@ -119,15 +118,8 @@ def clean_text(text: str) -> str:
     text = text.replace('\n', ' ').replace('\r', ' ')
     return re.sub(r'\s+', ' ', text).strip()
 
-
-# OpenAI API Key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    print("❌ ERROR: Missing OPENAI_API_KEY.")
-    exit(1)
-
 # Generate embeddings
-def get_embeddings(texts, model="text-embedding-3-small", api_key=OPENAI_API_KEY):
+def get_embeddings(texts, model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")):
     """Fetch OpenAI embeddings."""
     url = "https://api.openai.com/v1/embeddings"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -140,7 +132,7 @@ def get_embeddings(texts, model="text-embedding-3-small", api_key=OPENAI_API_KEY
         print(f"❌ Embedding Error {response.status_code}: {response.text}")
         return None
     
-    # Background task to process uploaded file content
+# Background task to process uploaded file content
 def process_data_content(file_content, file_name, file_type, temp_file_path):
     """Process file content in the background"""
     try:
@@ -210,17 +202,17 @@ def check_if_exists(index, content_hash):
 
 # Decision system prompt
 decision_system_prompt = """
-Your task is to evaluate if the context fully answers the question. Consider:
-1. Are all key elements of the question addressed?
-2. Is the context specific to the game being asked about?
-3. Are there any contradictions between context and question?
-
-Return `1` if the context fully answers the question, `0` if it doesn't.
-Do NOT add explanations. Just return `1` or `0`.
+Evaluate if the provided context fully addresses the question about gaming.
 
 Context: {context}
 Question: {question}
+
+YOUR ANSWER MUST BE EXACTLY ONE CHARACTER:
+Return ONLY the digit `1` if the context satisfactorily answers the question.
+Return ONLY the digit `0` if the context fails to adequately answer.
+DO NOT include any explanation, analysis, or other text in your response.
 """
+
 # LLM response prompt
 system_prompt = """
 You are an AI assistant embedded in an in-game overlay. Your goal is to provide concise, game-specific assistance in a structured format.
@@ -229,13 +221,15 @@ You are an AI assistant embedded in an in-game overlay. Your goal is to provide 
 - Prioritize actionable information like item locations, enemy weaknesses, and quest guidance.
 - Avoid unnecessary explanations—only provide what is needed for the player to make progress.
 - If the game is unknown, offer general gaming tips instead.
+- For unclear or malformed queries, ask for clarification instead of guessing.
+- If the query is gibberish or completely invalid, respond with a polite request to rephrase.
 
 Response Format:
 [Tip] "Use fire attacks to weaken this enemy."
 [Location] "The Dectus Medallion (Left) is in Fort Haight, southeast of Mistwood."
 [General] "If you're lost, check for landmarks or quest markers on the map."
+[Clarification] "I'm not sure what you're asking. Could you please rephrase your question?"
 
-If the query is unclear, respond with: "Sorry, can you please rephrase that?", do not make stuff up.
 Only provide answers relevant to the context, and ensure accuracy based on available data.
 
 Context: {context}
@@ -321,24 +315,47 @@ def format_docs(search_results):
 # Decision system to decide if context can answer the question
 def decision_system(context, question):
     """Decision system to decide if context can answer the question."""
-    if not context:
+    # Input validation
+    if not context or not isinstance(context, str) or context.isspace():
         print("❌ No valid context found. Returning 0.")
-        return "0"  # If no context, return "0"
+        return "0"
     
-    # Format the prompt with the context and question
-    decision_prompt = decision_system_prompt.format(context=context, question=question)
+    if not question or not isinstance(question, str) or question.isspace():
+        print("❌ No valid question found. Returning 0.")
+        return "0"
     
-    # Query the LLM with decision prompt
-    decision_response = completion(
-        model="gpt-4o-mini",
-        messages=[{"content": decision_prompt, "role": "system"}],
-        max_tokens=3
-    )
+    try:
+        # Format the prompt with the context and question
+        decision_prompt = decision_system_prompt.format(context=context, question=question)
+        
+        # Query the LLM with decision prompt
+        decision_response = completion(
+            model="gpt-4o-mini",
+            messages=[{"content": decision_prompt, "role": "system"}],
+            max_tokens=3,  # Small number to avoid longer responses
+            temperature=0.0  # Zero temperature for deterministic output
+        )
+        
+        # Extract and validate response
+        response_text = decision_response.choices[0].message.content.strip()
+        
+        # Only accept "0" or "1" as valid responses
+        if response_text == "0" or response_text == "1":
+            return response_text
+        else:
+            # Extract first digit if response contains one
+            for char in response_text:
+                if char in ["0", "1"]:
+                    print(f"⚠️ Extracted valid digit from response: {response_text}") #Error Checks
+                    return char
+            
+            print(f"⚠️ Unexpected response: {response_text}. Defaulting to 0.")
+            return "0"
+            
+    except Exception as e:
+        print(f"⚠️ Error in decision system: {e}. Defaulting to 0.")
+        return "0"
     
-    # Return 1 or 0 based on LLM's decision
-    decision = decision_response.choices[0].message.content.strip()
-    return decision
-
 # Function to store question and response in Pinecone
 def qa_storage(question: str, response: str, index, namespace="games_queries"):
     """Store the question and response pair in Pinecone index."""
@@ -410,11 +427,10 @@ def response_generation(question):
         context = format_search_results(results)
         print("Found online sources. Generating the response...")
 
-        # Optionally, run Chain-of-Thought analysis before generating response
+        #After web search, in response_generation
         reasoning = cot_analysis(question, context)
         print("CoT Reasoning: ", reasoning)
         
-
         response = completion(
             model="gpt-4-turbo",
             messages=[
@@ -428,11 +444,13 @@ def response_generation(question):
     # Optionally, validate the response
     if validate_response(response_text, context):
         print("✅ Response is validated with context.")
+    
+        # Store the question and the response in Pinecone
+        #qa_storage(question, response_text, index)
     else:
         print("⚠️ Response validation failed.")
 
-    # Store the question and the response in Pinecone
-    # qa_storage(question, response_text, index)
+    
 
     return response_text
 
@@ -464,82 +482,92 @@ async def ask_question(question: QuestionRequest):
     start_time = time.time()
     response_text = rag_pipeline(question.text, question.game_name)
     elapsed_time = time.time() - start_time
+    converted_time = datetime.timedelta(seconds=elapsed_time)
+    print(f"Time: {converted_time}")
     
     return QuestionResponse(response=response_text, elapsed_time=elapsed_time)
 
 @app.post("/upload-data", response_model=UploadResponse)
-async def upload_data(background_tasks: BackgroundTasks, file: UploadFile = File(...), type: str = Form(...)):
-    """Upload a file (PDF, JSON, CSV, Markdown) and process it in the background"""
-    # Save the uploaded file temporarily
+async def upload_data(file: UploadFile = File(...), type: str = Form(...)):
+    """Upload a file (PDF, JSON, CSV, Markdown) and process it synchronously before returning"""
     temp_file_path = f"temp_{file.filename}"
-    with open(temp_file_path, "wb") as buffer:
-        buffer.write(await file.read())
-    
-    # Extract content based on file type
-    file_name = file.filename
-    file_content = ""
     
     try:
+        # Save the uploaded file temporarily
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(await file.read())
+
+        # Extract content based on file type
+        file_name = file.filename
+        file_content = ""
+
         if type == "pdf":
-            # Use the PDF reader for PDF files
             reader = PdfReader(temp_file_path)
-            number_of_pages = len(reader.pages)
-            
-            # Loop through each page and extract text
-            for page_num in range(number_of_pages):
-                page = reader.pages[page_num]
-                file_content += page.extract_text()
+            for page in reader.pages:
+                file_content += page.extract_text() or ""  # Handle possible None values
         elif type in ["json", "csv", "markdown"]:
-            # For text-based files, simply read the content
-            with open(temp_file_path, "r") as f:
+            with open(temp_file_path, "r", encoding="utf-8") as f:
                 file_content = f.read()
         else:
-            os.remove(temp_file_path)  # Clean up
-            return UploadResponse(message=f"Unsupported file type: {type}", chunks_count=0)
-    except Exception as e:
-        os.remove(temp_file_path)  # Clean up
-        return UploadResponse(message=f"Error reading file: {str(e)}", chunks_count=0)
-    
-    if not file_content:
-        os.remove(temp_file_path)  # Clean up
-        return UploadResponse(message=f"No content could be extracted from the {type} file", chunks_count=0)
-    
-    # Process the file content in the background
-    background_tasks.add_task(process_data_content, file_content, file_name, type, temp_file_path)
-    
-    # Return a response immediately
-    return UploadResponse(
-        message=f"{type.upper()} file '{file_name}' uploaded and processing in background", 
-        chunks_count=len(file_content.split()) // 150  # Rough estimate of chunks
-    )
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {type}")
 
-@app.post("/import-from-wiki", response_model=UploadResponse)
-async def import_from_wiki(background_tasks: BackgroundTasks, request: FetchURLcontent):
-    """Import content from a wiki URL and process it in the background"""
+        if not file_content.strip():
+            raise HTTPException(status_code=400, detail=f"No content could be extracted from the {type} file")
+
+        # Process the file content synchronously
+        process_data_content(file_content, file_name, type, temp_file_path)  # No 'await' needed
+
+        # Return a response after processing is complete
+        return UploadResponse(
+            message=f"{type.upper()} file '{file_name}' successfully processed",
+            chunks_count=max(1, len(file_content.split()) // 150)  # Ensure at least 1 chunk
+        )
+
+    except HTTPException as http_ex:
+        raise http_ex  
+    except Exception as e:
+        logging.error(f"File Upload Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error processing file")
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+
+@app.post("/import-from-url", response_model=UploadResponse)
+async def import_from_url(request: FetchURLcontent):
+    """Import content from a URL and process it synchronously before returning"""
     url = request.url
-    
-    # Fetch content from URL using the existing GET endpoint
-    content = await fetch_url_content(url)
-    
-    if not content:
-        return UploadResponse(message=f"Failed to fetch content from URL: {url}", chunks_count=0)
-    
-    # Extract domain as the "filename"
+
     try:
-        from urllib.parse import urlparse
-        domain = urlparse(url).netloc
-        file_name = f"{domain}_wiki"
-    except:
-        file_name = f"wiki_import_{int(time.time())}"
-    
-    # Process the wiki content in the background
-    background_tasks.add_task(process_data_content, content, file_name, "wiki", None)
-    
-    # Return a response immediately
-    return UploadResponse(
-        message=f"Wiki content from '{url}' is being processed in background", 
-        chunks_count=len(content.split()) // 150  # Rough estimate of chunks
-    )
+        # Validate URL format
+        result = urlparse(url)
+        if not all([result.scheme, result.netloc]):
+            raise HTTPException(status_code=400, detail=f"Invalid URL format: {url}")
+
+        # Fetch content from URL using the existing GET endpoint
+        content = await fetch_url_content(url)  # Ensure fetch_url_content is async
+
+        if not content or not content.strip():
+            raise HTTPException(status_code=404, detail=f"Failed to fetch content from URL: {url}")
+
+        # Extract domain as the "filename"
+        domain = result.netloc
+        file_name = f"{domain}_url"
+
+        # Process the URL content synchronously
+        process_data_content(content, file_name, "url", None)
+
+        # Return a response after processing is complete
+        return UploadResponse(
+            message=f"Game content from '{url}' has been successfully processed",
+            chunks_count=max(1, len(content.split()) // 150)  # Ensure at least 1 chunk
+        )
+
+    except HTTPException as http_ex:
+        raise http_ex  
+    except Exception as e:
+        logging.error(f"URL Import Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error importing from URL")
 
 
 @app.post("/delete-data")
@@ -556,17 +584,17 @@ async def delete_data(request: DeleteDataRequest):
         return {"error": str(e)}
 
 
-# Fixed endpoint function that calls the detection function
+# API endpoint that calls the game detection function
 @app.get("/detect-game")
 async def detect_game():
-    game_name = get_current_game()  # Call the renamed function
+    game_name = get_current_game()
     print(f"Current game: {game_name}")
     if not game_name:
         return {"gameName": ""}
     
     return {"gameName": game_name}
 
-# Rename the detection function to avoid naming conflict
+# Game detection function
 def get_current_game():
     """Detect the currently running game using multiple methods"""
     # First try process detection (more reliable for known games)
@@ -619,51 +647,6 @@ def get_current_game():
         pass
         
     return ""
-
-
-#     # Optional: Filter out known non-game applications
-#     common_apps = ["Google Chrome", "Discord", "Spotify", "File Explorer"]
-#     if any(app in game_name for app in common_apps):  # Use game_name here
-#         return {"gameName": ""}
-
-#     return {"gameName": game_name}
-
-# def get_active_window_name():
-#     try:
-#         active_window = gw.getActiveWindow()
-#         if active_window:
-#             print(f"Detected window title: {active_window.title}")  # Add this line
-#             return active_window.title
-#     except:
-#         return None
-#     return None
-
-
-
-# def detecting_game():
-#     """A function to detect the game that is currently on"""
-#     game_processes = {
-#         "eldenring.exe": "Elden Ring",
-#         "RocketLeague.exe": "Rocket League",
-#         "GTA5.exe": "Grand Theft Auto V",
-#         "csgo.exe": "Counter-Strike 2",
-#         "Cyberpunk2077.exe": "Cyberpunk 2077",
-#         "FortniteClient-Win64-Shipping.exe": "Fortnite",
-#         "Overwatch.exe": "Overwatch 2",
-#         "VALORANT.exe": "VALORANT",
-#         "LeagueofLegends.exe": "League of Legends",
-#         "Minecraft.exe": "Minecraft",
-#     }
-
-#     for proc in psutil.process_iter(['name']):
-#         try:
-#             process_name = proc.info['name']
-#             if process_name in game_processes:
-#                 return game_processes[process_name]
-#         except:
-#             pass
-
-#     return ""
 
 # Health check endpoint
 @app.get("/health")
