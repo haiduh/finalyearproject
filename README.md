@@ -7,8 +7,20 @@ An AI-powered in-game assistant that provides real-time, context-aware assistanc
 - **Dynamic Assistance**: Provides real-time responses to player queries, fetching data dynamically from in-game datasets or external sources.
 - **Cross-Game Support**: Easily adaptable to multiple games by uploading structured datasets (JSON, wiki formats, etc.) with minimal effort.
 - **Overlay Integration**: An Electron-based overlay displays answers directly in the game without interrupting gameplay.
-- **Natural Language Processing (NLP)**: Utilizes semantic search and LLM-powered reasoning to refine responses and ensure relevance.
+- **Natural Language Processing (NLP)**: Utilises semantic search and LLM-powered reasoning to refine responses and ensure relevance.
 - **Developer Tools**: Includes an interface for developers to upload datasets and integrate the system into new games.
+
+## Technology Stack
+
+- **Frontend**: Electron with React for cross-platform desktop application development
+  - Enables seamless in-game overlay that doesn't interrupt the gaming experience
+  - React components provide responsive UI elements for both players and developers
+  - Custom React hooks manage state and API communication with the backend
+- **Backend**: Python with Flask API
+  - Handles RAG pipeline processing and LLM integration
+  - Manages vector database connections and query processing
+- **Vector Database**: Pinecone for efficient similarity searches
+- **LLM Integration**: Connects to various large language models for natural language understanding
 
 ## Installation
 
@@ -22,8 +34,8 @@ An AI-powered in-game assistant that provides real-time, context-aware assistanc
 ### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/ai-in-game-assistant.git
-cd ai-in-game-assistant
+git clone https://github.com/haiduh/finalyearproject.git
+cd "AI Assistant"
 ```
 
 ### Step 2: Install Backend (Python Dependencies)
@@ -31,16 +43,16 @@ cd ai-in-game-assistant
 In the backend/ folder:
 
 ```bash
-cd backend
+cd "2. backend"
 pip install -r requirements.txt
 ```
 
-### Step 3: Install Frontend (Electron & Node.js Dependencies)
+### Step 3: Install Frontend (Electron & React Dependencies)
 
 In the frontend/ folder:
 
 ```bash
-cd frontend
+cd "1. frontend"
 npm install
 ```
 
@@ -48,33 +60,33 @@ npm install
 
 1. Sign up for a Pinecone account.
 2. Follow the documentation to get your API Key.
-3. In the backend/config.py file, replace the placeholder with your API key.
+3. In the backend/.env file, replace the placeholder with your API key.
 
 ### Step 5: Run the Project
 
 Start Backend:
 
 ```bash
-cd backend
-python app.py
+cd "2. backend"
+python backend.py
 ```
 
-Start Frontend (Electron):
+Start Frontend (Electron + React):
 
 ```bash
-cd frontend
+cd "1. frontend"
 npm start
 ```
 
-The application should now open an Electron window where you can interact with the assistant in the game.
+The application should now open an Electron window with the React UI where you can interact with the assistant in the game.
 
 ## Usage
 
 ### In-Game Interaction:
 
 1. Press F2 to open the assistant overlay.
-2. Ask a question using natural language (e.g., "Where is the Silver Sword?").
-3. The assistant will display the response directly in the game.
+2. Ask any game-related query (e.g., "What is the Y level for finding diamonds in Minecraft?").
+3. The assistant will display the response directly in the overlay UI.
 
 ### Developer Tools:
 
@@ -82,20 +94,23 @@ The application should now open an Electron window where you can interact with t
 2. Upload a structured dataset (in JSON format) for a new game to enable querying.
 3. The system will automatically integrate and make the new dataset available for player queries.
 
+## Frontend Architecture
+
+The frontend is built with Electron and React to provide a seamless overlay experience:
+
+- **Main Process**: Handles the Electron window creation, game overlay integration, and IPC communication
+- **Renderer Process**: Contains the React application that renders the UI components
+
 ## Example Datasets
 
-You can find example game datasets in the `datasets/` folder. These datasets are structured in JSON format, where each entry represents a game-specific element (e.g., items, quests, locations). Developers can modify or add to these datasets as needed.
+You can find example game datasets in the `3. datasets/` folder. Developers can modify or add to these datasets as needed.
 
 ## Contributing
 
 Feel free to fork this repository and make improvements or add new features. If you have suggestions or find any issues, open an issue or submit a pull request.
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - Pinecone for vector database service
-- Electron for seamless cross-platform desktop app development
+- Electron and React for seamless cross-platform desktop app development
 - OpenAI GPT models for natural language processing
