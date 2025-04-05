@@ -202,14 +202,16 @@ def check_if_exists(index, content_hash):
 
 # Decision system prompt
 decision_system_prompt = """
-Evaluate if the provided context fully addresses the question about gaming.
+Evaluate if the provided context contains ANY RELEVANT INFORMATION that might help answer the question about gaming.
 
 Context: {context}
 Question: {question}
 
 YOUR ANSWER MUST BE EXACTLY ONE CHARACTER:
-Return ONLY the digit `1` if the context satisfactorily answers the question.
-Return ONLY the digit `0` if the context fails to adequately answer.
+Return ONLY the digit `1` if the context contains ANY information relevant to answering the question.
+Return ONLY the digit `0` ONLY if the context contains ABSOLUTELY NOTHING related to the question.
+
+Even partial information should result in a `1` response.
 DO NOT include any explanation, analysis, or other text in your response.
 """
 
@@ -281,6 +283,19 @@ def cot_analysis(question: str, context: str) -> str:
         temperature=0.3
     ).choices[0].message.content
 
+def determine_complexity(question: str, context: str) -> bool:
+    """Determine if a question is complex enough to warrant CoT reasoning"""
+    # Simple heuristics approach
+    complexity_indicators = [
+        len(question.split()) > 12,  # Longer questions tend to be more complex
+        "?" in question and "," in question,  # Questions with multiple clauses
+        any(word in question.lower() for word in ["compare", "difference", "better", "versus", "vs", "strategy", "build", "optimize"]),
+        len(context.split()) > 500  # Large context might need better reasoning
+    ]
+    
+    # If multiple indicators are true, it's likely complex
+    return sum(complexity_indicators) >= 2
+
 def validate_response(response: str, context: str) -> bool:
     """Check if response is context-supported"""
     prompt = f"""Verify if this answer is fully supported by context (1=yes/0=no):
@@ -312,6 +327,8 @@ def format_docs(search_results):
     
     return "\n\n".join([match["metadata"]["source_text"] for match in search_results["matches"]])
 
+
+
 # Decision system to decide if context can answer the question
 def decision_system(context, question):
     """Decision system to decide if context can answer the question."""
@@ -323,6 +340,18 @@ def decision_system(context, question):
     if not question or not isinstance(question, str) or question.isspace():
         print("❌ No valid question found. Returning 0.")
         return "0"
+    
+    # Check for exact keyword matches first (simple heuristic)
+    question_keywords = set(question.lower().split())
+    
+    # Count keyword matches in context
+    matches = sum(1 for word in question_keywords if word in context.lower())
+    keyword_match_ratio = matches / len(question_keywords) if question_keywords else 0
+    
+    # If strong keyword match, use the context without calling the LLM
+    if keyword_match_ratio > 0.5 and len(question_keywords) >= 2:
+        print(f"✅ Strong keyword match ({keyword_match_ratio:.2f}). Using context without LLM check.")
+        return "1"
     
     try:
         # Format the prompt with the context and question
@@ -341,12 +370,13 @@ def decision_system(context, question):
         
         # Only accept "0" or "1" as valid responses
         if response_text == "0" or response_text == "1":
+            print(f"✅ Decision system returned: {response_text}")
             return response_text
         else:
             # Extract first digit if response contains one
             for char in response_text:
                 if char in ["0", "1"]:
-                    print(f"⚠️ Extracted valid digit from response: {response_text}") #Error Checks
+                    print(f"⚠️ Extracted valid digit from response: {response_text}")
                     return char
             
             print(f"⚠️ Unexpected response: {response_text}. Defaulting to 0.")
@@ -427,9 +457,9 @@ def response_generation(question):
         context = format_search_results(results)
         print("Found online sources. Generating the response...")
 
-        #After web search, in response_generation
-        reasoning = cot_analysis(question, context)
-        print("CoT Reasoning: ", reasoning)
+        if determine_complexity(question, context):
+            reasoning = cot_analysis(question, context)
+            print("CoT Reasoning: ", reasoning)
         
         response = completion(
             model="gpt-4-turbo",
