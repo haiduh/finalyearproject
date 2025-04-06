@@ -2,6 +2,9 @@
 
 An AI-powered in-game assistant that provides real-time, context-aware assistance to players. The system leverages a Retrieval-Augmented Generation (RAG) pipeline, large language models (LLMs), and dynamic data fetching to deliver accurate and relevant in-game guidance without disrupting the player's experience.
 
+![implementation](https://github.com/user-attachments/assets/ccaaf314-b2de-4b45-b2f4-452d1d4391dc)
+
+
 ## Features
 
 - **Dynamic Assistance**: Provides real-time responses to player queries, fetching data dynamically from in-game datasets or external sources.
