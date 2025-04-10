@@ -181,7 +181,7 @@ def process_data_content(file_content, file_name, file_type, temp_file_path):
             print(f"⚠️ No new content to insert from {file_name}.")
     
     finally:
-        # Clean up the temporary file - only if it exists and is not None
+        # Clean up resources
         if temp_file_path is not None and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
@@ -308,17 +308,19 @@ def validate_response(response: str, context: str) -> bool:
     ).choices[0].message.content.strip() == "1"    
 
 def search(query_text: str, namespaces: list, top_k: int = 3):
-    """Search with query expansion"""
-    # Add query expansion
-    expanded_queries = [query_text] + expand_query(query_text)
-    query_embedding = get_embeddings([" ".join(expanded_queries)])[0]["embedding"]
-    
-    # Rest of your original code remains the same
+    """Search with query_text"""
+    # Generate embedding for the provided query text
+    query_embedding = get_embeddings([query_text])[0]["embedding"]
     all_results = []
     for namespace in namespaces:
         results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True, namespace=namespace)
         all_results.extend(results["matches"])
     return {"matches": all_results}
+
+def needs_expansion(question: str) -> bool:
+    """Simple check if query expansion is needed"""
+    # Only expand queries that are short or lack specific game terms
+    return len(question.split()) <= 5 or "?" in question and len(question) < 40
 
 def format_docs(search_results):
     """Format Pinecone search results into readable context."""
@@ -326,7 +328,6 @@ def format_docs(search_results):
         return ""
     
     return "\n\n".join([match["metadata"]["source_text"] for match in search_results["matches"]])
-
 
 
 # Decision system to decide if context can answer the question
@@ -386,6 +387,7 @@ def decision_system(context, question):
         print(f"⚠️ Error in decision system: {e}. Defaulting to 0.")
         return "0"
     
+    
 # Function to store question and response in Pinecone
 def qa_storage(question: str, response: str, index, namespace="games_queries"):
     """Store the question and response pair in Pinecone index."""
@@ -415,15 +417,23 @@ def rag_pipeline(question, game_name=None):
     print(question)
     return response_generation(question)
 
+
+# Modify your response_generation function with minimal changes
 def response_generation(question):
     # Define the namespaces
     namespaces = ["game_docs", "game_queries"]
     
-    # Expand the query before searching
-    expanded_queries = [question] + expand_query(question)
+    # Conditionally apply query expansion
+    if needs_expansion(question):
+        expanded_queries = [question] + expand_query(question)
+        query_text = " ".join(expanded_queries)
+        print("Using expanded query")
+    else:
+        query_text = question
+        print("Using original query without expansion")
     
-    # Search for context based on expanded queries
-    search_results = search(" ".join(expanded_queries), namespaces)
+    # Use the query_text for searching
+    search_results = search(query_text, namespaces)
     context = format_docs(search_results)
     
     print("Context: ", context)  # Print context to inspect it
@@ -480,9 +490,8 @@ def response_generation(question):
     else:
         print("⚠️ Response validation failed.")
 
-    
-
     return response_text
+
 
 #API classes and endpoints start
 
