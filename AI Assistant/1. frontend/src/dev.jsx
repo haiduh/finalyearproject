@@ -278,7 +278,7 @@ function DevApp() {
   );
 }
 
-// Modern React 18 rendering
+// Rendering for DevApp
 const container = document.getElementById('root');
 const root = createRoot(container);
 root.render(<DevApp />);
