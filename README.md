@@ -41,22 +41,22 @@ git clone https://github.com/haiduh/finalyearproject.git
 cd "AI Assistant"
 ```
 
-### Step 2: Install Backend (Python Dependencies)
-
-In the backend/ folder:
-
-```bash
-cd "2. backend"
-pip install -r requirements.txt
-```
-
-### Step 3: Install Frontend (Electron & React Dependencies)
+### Step 2: Install Frontend (Electron & React Dependencies)
 
 In the frontend/ folder:
 
 ```bash
 cd "1. frontend"
 npm install
+```
+
+### Step 3: Install Backend (Python Dependencies)
+
+In the backend/ folder:
+
+```bash
+cd "2. backend"
+pip install -r requirements.txt
 ```
 
 ### Step 4: Setup Pinecone (or alternative vector database)
@@ -67,18 +67,18 @@ npm install
 
 ### Step 5: Run the Project
 
-Start Backend:
-
-```bash
-cd "2. backend"
-python backend.py
-```
-
 Start Frontend (Electron + React):
 
 ```bash
 cd "1. frontend"
 npm start
+```
+
+Start Backend:
+
+```bash
+cd "2. backend"
+python backend.py
 ```
 
 The application should now open an Electron window with the React UI where you can interact with the assistant in the game.
