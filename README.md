@@ -33,6 +33,7 @@ An AI-powered in-game assistant that provides real-time, context-aware assistanc
 - **Python** (v3.8 or later)
 - **Pip** (Python package manager)
 - **Pinecone account** (for vector database integration)
+- **OpenAI account** (for API access)
 
 ### Step 1: Clone the repository
 
@@ -59,11 +60,12 @@ cd "2. backend"
 pip install -r requirements.txt
 ```
 
-### Step 4: Setup Pinecone (or alternative vector database)
+### Step 4: Setup Pinecone and OpenAI
 
-1. Sign up for a Pinecone account.
-2. Follow the documentation to get your API Key.
-3. In the backend/.env file, replace the placeholder with your API key.
+1. Sign up for a Pinecone account and get your API Key.
+2. Create an OpenAI account and generate an API key from the OpenAI dashboard.
+3. Rename the `.env.example` file to `.env` in the backend folder.
+4. In the `.env` file, replace the placeholder values with your Pinecone and OpenAI API keys.
 
 ### Step 5: Run the Project
 
